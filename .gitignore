@@ -1,0 +1,6 @@
+music_analysis.json 
+*_debug.wav 
+__pycache__/ 
+.env 
+venv/ 
+*.json   # Add this to ignore all JSON files
