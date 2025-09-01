@@ -1,0 +1,103 @@
+=== Redeploy started at 24/08/2025 14:09:33.39 === 
+=== Checking Docker availability === 
+Client:
+ Version:           28.3.2
+ API version:       1.51
+ Go version:        go1.24.5
+ Git commit:        578ccf6
+ Built:             Wed Jul  9 16:12:31 2025
+ OS/Arch:           windows/amd64
+ Context:           desktop-linux
+
+Server: Docker Desktop 4.44.2 (202017)
+ Engine:
+  Version:          28.3.2
+  API version:      1.51 (minimum version 1.24)
+  Go version:       go1.24.5
+  Git commit:       e77ff99
+  Built:            Wed Jul  9 16:13:55 2025
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          1.7.27
+  GitCommit:        05044ec0a9a75232cad458027ca83437aae3f4da
+ runc:
+  Version:          1.2.5
+  GitCommit:        v1.2.5-0-g59923ef
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+✅ Docker is running. Building image locally... 
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 668B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:18-bullseye
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B 0.0s done
+#3 DONE 0.1s
+
+#4 [1/8] FROM docker.io/library/node:18-bullseye@sha256:0d9e9a8dcd5a83ea737ed92227a6591a31ad70c8bb722b0c51aff7ae23a88b6a
+#4 resolve docker.io/library/node:18-bullseye@sha256:0d9e9a8dcd5a83ea737ed92227a6591a31ad70c8bb722b0c51aff7ae23a88b6a 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 145.27kB 0.2s done
+#5 DONE 0.2s
+
+#6 [2/8] RUN apt-get update && apt-get install -y     python3 python3-pip python3-dev     build-essential libyaml-dev libfftw3-dev     libavcodec-dev libavformat-dev libavutil-dev     libsamplerate0-dev libtag1-dev libflac-dev libogg-dev libvorbis-dev     && rm -rf /var/lib/apt/lists/*
+#6 CACHED
+
+#7 [3/8] WORKDIR /app
+#7 CACHED
+
+#8 [4/8] COPY package*.json ./
+#8 CACHED
+
+#9 [5/8] RUN npm install
+#9 1.847 npm error code ETARGET
+#9 1.847 npm error notarget No matching version found for multer@^1.4.5.
+#9 1.847 npm error notarget In most cases you or one of your dependencies are requesting
+#9 1.847 npm error notarget a package version that doesn't exist.
+#9 1.850 npm notice
+#9 1.850 npm notice New major version of npm available! 10.8.2 -> 11.5.2
+#9 1.850 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.5.2
+#9 1.850 npm notice To update run: npm install -g npm@11.5.2
+#9 1.850 npm notice
+#9 1.850 npm error A complete log of this run can be found in: /root/.npm/_logs/2025-08-24T13_09_35_031Z-debug-0.log
+#9 ERROR: process "/bin/sh -c npm install" did not complete successfully: exit code: 1
+------
+ > [5/8] RUN npm install:
+1.847 npm error code ETARGET
+1.847 npm error notarget No matching version found for multer@^1.4.5.
+1.847 npm error notarget In most cases you or one of your dependencies are requesting
+1.847 npm error notarget a package version that doesn't exist.
+1.850 npm notice
+1.850 npm notice New major version of npm available! 10.8.2 -> 11.5.2
+1.850 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.5.2
+1.850 npm notice To update run: npm install -g npm@11.5.2
+1.850 npm notice
+1.850 npm error A complete log of this run can be found in: /root/.npm/_logs/2025-08-24T13_09_35_031Z-debug-0.log
+------
+Dockerfile:15
+--------------------
+  13 |     # Copy Node deps
+  14 |     COPY package*.json ./
+  15 | >>> RUN npm install
+  16 |     
+  17 |     # Copy Python deps
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c npm install" did not complete successfully: exit code: 1
+The push refers to repository [gcr.io/music-analysis-app/music-backend]
+tag does not exist: gcr.io/music-analysis-app/music-backend:latest
+=== Deploying to Cloud Run === 
+Deploying container to Cloud Run service [music-backend] in project [music-analysis-app] region [europe-west1]
+Deploying...
+Setting IAM Policy.............done
+Creating Revision......failed
+Deployment failed
+ERROR: (gcloud.run.deploy) Revision 'music-backend-00012-rvs' is not ready and cannot serve traffic. Image 'gcr.io/music-analysis-app/music-backend:latest' not found.
