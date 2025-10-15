@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    container_name: music-analyzer-backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+      - ./music_analyzer.py:/usr/src/app/music_analyzer.py
+      - ./requirements.txt:/usr/src/app/requirements.txt
+      - ./db:/usr/src/app/db  # For SQLite database file
+    environment:
+      - PORT=8080
+      - UPLOAD_DIR=/usr/src/app/uploads
+      - DB_FILE=/usr/src/app/db/music_library.db
+      # Add other env vars as needed
+    restart: unless-stopped
+
+# Named volume for persistent DB storage (alternative to bind mount above)
+# volumes:
+#   db_data:

@@ -1,2 +1,16 @@
-librosa==0.10.1
-numpy
+# Core audio processing
+librosa==0.10.2.post1
+essentia==2.1b6.dev609
+numpy==1.26.4
+soundfile==0.12.1
+
+# Audio codec support
+ffmpeg-python>=0.2.0
+
+# Additional utilities
+resampy>=0.4.2
+audioread>=3.0.0
+requests>=2.31.0
+tqdm>=4.66.1
+
+# Note: Essentia is not available via pip on Windows, so we'll skip it

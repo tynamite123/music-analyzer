@@ -50,6 +50,11 @@ echo === Deploying to Cloud Run ===
 gcloud run deploy music-backend ^
   --image gcr.io/music-analysis-app/music-backend:latest ^
   --region europe-west1 ^
+  --min-instances 1 ^
+  --timeout 3600 ^
+  --cpu 1 ^
+  --memory 1Gi ^
+  --set-env-vars BUCKET_NAME=music_analyser_app_20010928 ^
   --allow-unauthenticated ^
   --project music-analysis-app
 if %errorlevel% neq 0 (

@@ -1,125 +1,205 @@
-// index.js (ES module)
-import express from "express";
-import cors from "cors";
-import multer from "multer";
-import { Storage } from "@google-cloud/storage";
-import { exec } from "child_process";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
-import dotenv from "dotenv";
+// index.js
+// Express backend with Multer uploads, CORS lockdown, ffmpeg conversion, and BPM via Essentia.js
 
-dotenv.config();
+// Node/Express basics
+const express = require("express");
+const cors = require("cors");
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
+const { spawn } = require("child_process");
 
-// __dirname for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Audio tooling
+const ffmpegPath = require("ffmpeg-static");
+const WavDecoder = require("wav-decoder");
 
-const app = express();
+// Essentia.js (WASM): load via dynamic import for CommonJS
+let essentia = null;
+async function initEssentia() {
+  // Use the ES module build shipped with the package
+  const { default: EssentiaCore } = await import("essentia.js/dist/essentia.js-core.es.js");
+  const { EssentiaWASM } = await import("essentia.js/dist/essentia-wasm.es.js");
+  essentia = new EssentiaCore(EssentiaWASM);
+  // Optionally log version or available algorithms
+  // console.log("Essentia.js version:", essentia.version);
+  // console.log("Algorithms:", essentia.algorithmNames.slice(0, 10));
+}
+const initPromise = initEssentia(); // kick off at module load
+
+// ---------- Config ----------
 const PORT = process.env.PORT || 8080;
 
-if (!process.env.BUCKET_NAME) {
-  console.warn("⚠️ BUCKET_NAME env var not set. Uploads to GCS will fail until set.");
+// Replace with your actual Firebase Hosting domains
+const ALLOWED_ORIGINS = [
+  "https://YOUR_PROJECT_ID.web.app",
+  "https://YOUR_PROJECT_ID.firebaseapp.com",
+];
+
+const app = express();
+
+// Strict CORS: only allow your frontend domains
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // allow same-origin/local tools
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      cb(new Error("CORS: Origin not allowed"));
+    },
+    methods: ["POST", "OPTIONS", "GET"],
+    allowedHeaders: ["Content-Type"],
+    maxAge: 86400,
+  })
+);
+
+// Multer storage: temp folder outside any public path
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+
+// Accept only MP3/WAV; limit size
+const allowedMimes = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav"]);
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024, files: 10 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const okExt = ext === ".mp3" || ext === ".wav";
+    const okMime = allowedMimes.has(file.mimetype);
+    if (okExt && okMime) cb(null, true);
+    else cb(new Error("Unsupported file type"));
+  },
+});
+
+// ---------- Helpers ----------
+
+// Convert any audio to mono 44.1kHz WAV using ffmpeg; return temp WAV path
+function toMonoWav(inputPath) {
+  return new Promise((resolve, reject) => {
+    const outPath = path.join(
+      uploadDir,
+      `${path.basename(inputPath, path.extname(inputPath))}-mono.wav`
+    );
+
+    const ff = spawn(ffmpegPath, [
+      "-y",
+      "-i",
+      inputPath,
+      "-ac", "1",         // mono
+      "-ar", "44100",     // sample rate
+      "-vn",
+      "-f", "wav",
+      outPath,
+    ]);
+
+    let err = "";
+    ff.stderr.on("data", (d) => (err += d.toString()));
+    ff.on("close", (code) => {
+      if (code === 0 && fs.existsSync(outPath)) resolve(outPath);
+      else reject(new Error(`ffmpeg failed (${code}): ${err}`));
+    });
+  });
 }
 
-// Configure Google Cloud Storage: if GOOGLE_APPLICATION_CREDENTIALS not set, uses default ADC
-const storage = new Storage({
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS || undefined
-});
-const BUCKET_NAME = process.env.BUCKET_NAME;
-const bucket = BUCKET_NAME ? storage.bucket(BUCKET_NAME) : null;
+// Decode WAV samples (Float32Array) from a file
+async function decodeWavFloat32(wavPath) {
+  const buf = fs.readFileSync(wavPath);
+  const wav = await WavDecoder.decode(buf);
+  const channelData = wav.channelData && wav.channelData[0] ? wav.channelData[0] : null;
+  if (!channelData) throw new Error("No channel data decoded");
+  return { samples: channelData, sampleRate: wav.sampleRate };
+}
 
-app.use(cors());
-app.use(express.json());
+// Compute BPM using Essentia.js RhythmExtractor2013
+function computeBpmEssentia(samples, sampleRate) {
+  // RhythmExtractor2013 expects a mono PCM signal and sample rate; returns tempo and beats
+  // Docs: tempo estimation demo and API references for Essentia.js algorithms.
+  const r = essentia.RhythmExtractor2013({
+    signal: samples,
+    sampleRate: sampleRate,
+  });
+  // r.tempo, r.beats, r.ticks, r.confidence
+  return {
+    bpm: r.tempo,
+    confidence: r.confidence,
+    beats: r.beats, // array of beat times in seconds
+  };
+}
 
-// Ensure uploads folder exists
-const UPLOADS_DIR = path.join(__dirname, "uploads");
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-const upload = multer({ dest: "uploads/" });
-
-app.get("/health", (req, res) => res.send("ok"));
-app.get("/healthz", (req, res) => res.send("ok"));
-
-// Upload route: save file, run Python analyzer, upload MP3 + JSON to GCS
-app.post("/upload", upload.single("track"), (req, res) => {
+// Clean up files safely
+function safeUnlink(filePath) {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (_) {}
+}
 
-    // sanitize filename
-    const safeName = req.file.originalname.replace(/[^\w\s.-]/g, "").replace(/\s+/g, "_");
-    const savedPath = path.join(UPLOADS_DIR, safeName);
+// ---------- Routes ----------
 
-    fs.renameSync(req.file.path, savedPath);
-    console.log(`📥 Saved uploaded file: ${savedPath}`);
-
-    // run python analyzer against uploads folder
-    // use 'python3' which is installed in container
-    const pyCmd = `python3 music_analyzer.py uploads`;
-    console.log(`🐍 Running: ${pyCmd}`);
-    exec(pyCmd, { cwd: __dirname, maxBuffer: 1024 * 1024 * 10 }, async (err, stdout, stderr) => {
-      console.log("🐍 PYTHON STDOUT:\n", stdout);
-      if (stderr) console.error("🐍 PYTHON STDERR:\n", stderr);
-
-      if (err) {
-        console.error("❌ Analyzer failed:", err);
-        return res.status(500).json({ error: "Analysis failed", details: stderr || err.message });
-      }
-
-      // upload original mp3 to GCS
-      if (bucket) {
-        try {
-          const destName = `uploads/${safeName}`;
-          await bucket.upload(savedPath, { destination: destName, resumable: false });
-          console.log(`✅ Uploaded MP3 to gs://${BUCKET_NAME}/${destName}`);
-        } catch (upErr) {
-          console.error("⚠️ Failed to upload MP3 to GCS:", upErr);
-        }
-      }
-
-      // upload analysis JSON if produced
-      const jsonPath = path.join(UPLOADS_DIR, "music_analysis.json");
-      if (fs.existsSync(jsonPath) && bucket) {
-        try {
-          await bucket.upload(jsonPath, { destination: "music_analysis.json", resumable: false });
-          console.log(`✅ Uploaded analysis JSON to gs://${BUCKET_NAME}/music_analysis.json`);
-        } catch (upErr) {
-          console.error("⚠️ Failed to upload JSON to GCS:", upErr);
-        }
-      }
-
-      res.json({ ok: true, message: "Uploaded and analyzed", pythonStdout: stdout });
-    });
-
+app.get("/health", async (req, res) => {
+  try {
+    await initPromise;
+    res.json({ ok: true, essentiaReady: !!essentia });
   } catch (e) {
-    console.error("Server error in /upload:", e);
-    res.status(500).json({ error: "Server error", details: e.message });
+    res.status(500).json({ ok: false, error: "Essentia init failed" });
   }
 });
 
-app.get("/results-json", async (req, res) => {
-  // try to read from local uploads first, then from GCS
-  const localPath = path.join(UPLOADS_DIR, "music_analysis.json");
-  if (fs.existsSync(localPath)) {
-    return res.sendFile(localPath);
-  }
-  if (!bucket) return res.status(404).send("No analysis found locally or GCS not configured.");
+app.post("/upload", upload.array("track", 10), async (req, res) => {
   try {
-    const file = bucket.file("music_analysis.json");
-    const [exists] = await file.exists();
-    if (!exists) return res.status(404).send("No analysis found in GCS.");
-    const [contents] = await file.download();
-    res.type("application/json").send(contents);
-  } catch (err) {
-    console.error("Error fetching results from GCS:", err);
-    res.status(500).send("Failed to get results.");
+    await initPromise;
+    if (!essentia) throw new Error("Essentia not initialized");
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
+
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: "No files uploaded" });
+  }
+
+  const results = [];
+
+  for (const file of req.files) {
+    const originalPath = file.path;
+    let wavPath;
+
+    try {
+      // Convert to mono WAV for analysis
+      wavPath = await toMonoWav(originalPath);
+
+      // Decode samples
+      const { samples, sampleRate } = await decodeWavFloat32(wavPath);
+
+      // Compute BPM via Essentia
+      const rhythm = computeBpmEssentia(samples, sampleRate);
+
+      results.push({
+        originalName: file.originalname,
+        bpm: Math.round(rhythm.bpm * 100) / 100,
+        confidence: Math.round(rhythm.confidence * 1000) / 1000,
+        beats: rhythm.beats, // optionally omit if payload size matters
+      });
+    } catch (err) {
+      results.push({
+        originalName: file.originalname,
+        error: err.message,
+      });
+    } finally {
+      // Remove temp files
+      safeUnlink(originalPath);
+      if (wavPath) safeUnlink(wavPath);
+    }
+  }
+
+  res.json({ tracks: results });
 });
 
-app.get("/", (req, res) => {
-  res.send("Music analyzer backend is running.");
-});
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Backend running on port ${PORT} and bound to 0.0.0.0`);
+// ---------- Start ----------
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
