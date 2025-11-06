@@ -1,10 +1,13 @@
+# IDE caches
+.vs/
+
 # Node dependencies
 node_modules/
 
-# Uploaded files
+# Uploads
 uploads/
 
-# Environment variables and secrets
+# Secrets
 .env
 *.json
 
