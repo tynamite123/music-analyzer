@@ -1,17 +1,39 @@
-# IDE caches
+# IDE / Editor caches
 .vs/
+.vscode/
+*.swp
 
 # Node dependencies
 node_modules/
 
-# Uploads
-uploads/
+# Build output
+dist/
+build/
+coverage/
 
-# Secrets
+# Uploads / temp files
+uploads/
+tmp/
+*.tmp
+
+# Environment & secrets
 .env
+.env.local
+.env.*.local
+
+# Ignore secret JSONs but keep package.json
+# First ignore all JSON...
 *.json
+# ...then explicitly allow package.json and package-lock.json
+!package.json
+!package-lock.json
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
