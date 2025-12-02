@@ -9,8 +9,14 @@
     "start:frontend": "cd Frontend && python -m http.server 3000",
     "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "music",
+    "analysis",
+    "node",
+    "express",
+    "google-cloud-storage"
+  ],
+  "author": "Ty",
   "license": "MIT",
   "dependencies": {
     "@google-cloud/storage": "^7.17.3",
@@ -23,5 +29,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
