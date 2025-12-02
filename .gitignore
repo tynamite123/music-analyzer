@@ -21,10 +21,12 @@ tmp/
 .env.local
 .env.*.local
 
-# Ignore secret JSONs but keep package.json
-# First ignore all JSON...
-*.json
-# ...then explicitly allow package.json and package-lock.json
+# Ignore secret JSONs but allow config files
+# Block service account keys or credential files
+*secret*.json
+*.credentials.json
+
+# Always keep package.json and package-lock.json
 !package.json
 !package-lock.json
 
