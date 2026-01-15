@@ -1,6 +1,5 @@
 // index.js
 // Run: node index.js
-// Required packages: express, multer, @google-cloud/storage, cors
 
 const express = require('express');
 const cors = require('cors');
@@ -12,15 +11,16 @@ const app = express();
 const upload = multer({ dest: 'uploads/' });
 const PORT = process.env.PORT || 8080;
 
+// ======= DEBUG: Show exactly what Render stored =======
+console.log("RAW GOOGLE_CLOUD_KEY:", JSON.stringify(process.env.GOOGLE_CLOUD_KEY));
+
 // ======= Configuration =======
-// Allowed origins for CORS - adjust to your frontend domains
 const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'https://your-frontend.web.app',
   'https://your-frontend.firebaseapp.com'
 ];
 
-// Default GCS bucket name. You can override with env var GCS_BUCKET.
 const DEFAULT_BUCKET = process.env.GCS_BUCKET || 'music-analyzer-uploads';
 
 // ======= CORS setup =======
@@ -35,14 +35,12 @@ app.use(cors({
 // ======= Load Google credentials from env =======
 if (!process.env.GOOGLE_CLOUD_KEY) {
   console.error('ERROR: Missing GOOGLE_CLOUD_KEY environment variable.');
-  console.error('Set the service account JSON as the GOOGLE_CLOUD_KEY env var in Render.');
   process.exit(1);
 }
 
 let gcpCreds;
 try {
-  // Some hosts convert newlines to literal \n when you paste multi-line JSON.
-  // Replace literal \\n with real newlines before parsing.
+  // Convert \\n → real newlines
   const raw = process.env.GOOGLE_CLOUD_KEY.replace(/\\n/g, '\n');
   gcpCreds = JSON.parse(raw);
 } catch (err) {
@@ -66,7 +64,6 @@ const storage = new Storage({
 });
 
 // ======= Upload endpoint =======
-// multipart form field name: file
 app.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -75,11 +72,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   const destination = req.file.originalname;
 
   try {
-    // Ensure bucket exists or the service account has permission
     await storage.bucket(bucketName).upload(localPath, { destination });
 
-    // Remove local temp file
-    try { fs.unlinkSync(localPath); } catch (e) { /* ignore */ }
+    try { fs.unlinkSync(localPath); } catch (e) {}
 
     return res.json({
       success: true,
@@ -88,7 +83,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     });
   } catch (err) {
     console.error('Upload failed:', err);
-    try { fs.unlinkSync(localPath); } catch (e) { /* ignore */ }
+    try { fs.unlinkSync(localPath); } catch (e) {}
     return res.status(500).json({ error: 'Upload failed', details: err.message });
   }
 });
