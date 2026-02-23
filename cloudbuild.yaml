@@ -11,3 +11,35 @@ logsBucket: 'gs://music-analysis-build-logs'
 
 options:
   logging: GCS_ONLY
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t',
+      'europe-west2-docker.pkg.dev/music-analysis-app/music-analyzer/music-analyzer-image',
+      '.'
+    ]
+
+  # Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'europe-west2-docker.pkg.dev/music-analysis-app/music-analyzer/music-analyzer-image'
+    ]
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args: [
+      'run', 'deploy', 'music-analyzer-service',
+      '--image', 'europe-west2-docker.pkg.dev/music-analysis-app/music-analyzer/music-analyzer-image',
+      '--region', 'europe-west2',
+      '--platform', 'managed',
+      '--allow-unauthenticated'
+    ]
+
+logsBucket: 'gs://music-analysis-build-logs'
+
+options:
+  logging: GCS_ONLY
