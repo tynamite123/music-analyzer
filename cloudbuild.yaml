@@ -1,0 +1,13 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t',
+      'europe-west2-docker.pkg.dev/music-analysis-app/music-analyzer/music-analyzer-image',
+      '.'
+    ]
+
+logsBucket: 'gs://music-analysis-build-logs'
+
+options:
+  logging: GCS_ONLY
