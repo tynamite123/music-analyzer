@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Music Analysis Results</title>
+</head>
+<body>
+  <h2>Analyzed Tracks</h2>
+  <div id="resultsList">Loading...</div>
+
+  <script>
+    async function loadResults() {
+      try {
+        const response = await fetch("https://music-backend-785098527240.europe-west1.run.app/results-json");
+        if (!response.ok) {
+          throw new Error("Failed to fetch results");
+        }
+        const data = await response.json();
+        renderResults(data);
+      } catch (err) {
+        console.error(err);
+        document.getElementById("resultsList").innerText = "Error loading results.";
+      }
+    }
+
+    function renderResults(tracks) {
+      if (!tracks.length) {
+        document.getElementById("resultsList").innerText = "No tracks analyzed yet.";
+        return;
+      }
+
+      let html = "<ul>";
+      for (const track of tracks) {
+        html += `
+          <li>
+            <strong>${track.filename}</strong><br/>
+            BPM: ${track.bpm} | Key: ${track.key} <br/>
+            Energy: ${track.energy ?? "Not available"} | 
+            Loudness: ${track.loudness ?? "Not available"} | 
+            Danceability: ${track.danceability ?? "Not available"}<br/>
+            Spectral Centroid: ${track.spectral_centroid} | 
+            Bandwidth: ${track.spectral_bandwidth} | 
+            Rolloff: ${track.spectral_rolloff}
+          </li><br/>
+        `;
+      }
+      html += "</ul>";
+
+      document.getElementById("resultsList").innerHTML = html;
+    }
+
+    loadResults();
+  </script>
+</body>
+</html>
