@@ -1,8 +1,13 @@
 FROM node:20-bullseye
 
-# Install only the tools you actually need
+# Install Python, sox, sqlite, and lightweight ffmpeg
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv ffmpeg sox sqlite3 && \
+    apt-get install -y python3 python3-pip python3-venv sox sqlite3 curl wget && \
+    wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz && \
+    tar -xf ffmpeg-release-amd64-static.tar.xz && \
+    mv ffmpeg-*-static/ffmpeg /usr/local/bin/ && \
+    mv ffmpeg-*-static/ffprobe /usr/local/bin/ && \
+    rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
@@ -12,7 +17,6 @@ RUN npm install
 
 COPY . .
 
-# Python venv setup
 RUN python3 -m venv venv && \
     . venv/bin/activate && \
     pip install --upgrade pip && \
