@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Music Analyzer</title>
+  <link rel="stylesheet" href="style.css"> <!-- fixed filename -->
+</head>
+<body>
+  <h1>Music Analyzer</h1>
+
+  <input type="file" id="fileInput" multiple>
+  <button id="uploadBtn">Upload</button>
+
+  <div id="results"></div>
+
+  <!-- Music Player -->
+  <h2>Player</h2>
+  <div id="waveform"></div>
+  <button id="playPauseBtn">Play/Pause</button>
+
+  <!-- Playlist -->
+  <h2>Playlist</h2>
+  <div id="playlist"></div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/wavesurfer.js@7"></script>
+  <script src="script.js"></script>
+  <script src="player.js"></script>
+</body>
+</html>
