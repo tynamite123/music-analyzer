@@ -1,8 +1,9 @@
 FROM node:20-bullseye
 
-# Install system and audio tools
+# Install only the tools you actually need
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv ffmpeg sox sqlite3 curl wget mplayer vlc
+    apt-get install -y python3 python3-pip python3-venv ffmpeg sox sqlite3 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
 
