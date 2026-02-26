@@ -49,7 +49,7 @@ async function initEssentia() {
     const { EssentiaWASM } = await import("essentia.js/dist/essentia-wasm.es.js");
 
     essentia = new EssentiaCore(EssentiaWASM, {
-      wasmURL: "/essentia/essentia-wasm.wasm"
+      wasmURL: "/essentia/essentia-wasm.wasm.wasm"
     });
 
     console.log("Essentia initialized successfully");
