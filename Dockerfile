@@ -12,11 +12,18 @@ RUN apt-get update && \
 
 WORKDIR /usr/src/app
 
+# Install Node dependencies
 COPY package*.json ./
 RUN npm install
 
+# Copy app files
 COPY . .
 
+# Copy Essentia WASM files into a public folder
+RUN mkdir -p public/essentia
+RUN cp node_modules/essentia.js/dist/* public/essentia/
+
+# Python venv setup
 RUN python3 -m venv venv && \
     . venv/bin/activate && \
     pip install --upgrade pip && \
