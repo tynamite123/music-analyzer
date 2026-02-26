@@ -19,11 +19,12 @@ RUN npm install
 # Copy app files
 COPY . .
 
-# Copy only the required Essentia WASM runtime files
+# Copy Essentia WASM runtime files (correct filenames)
 RUN mkdir -p public/essentia
 RUN cp node_modules/essentia.js/dist/essentia.js-core.es.js public/essentia/
 RUN cp node_modules/essentia.js/dist/essentia-wasm.es.js public/essentia/
-RUN cp node_modules/essentia.js/dist/essentia-wasm.wasm public/essentia/
+RUN cp node_modules/essentia.js/dist/essentia-wasm.wasm.js public/essentia/
+RUN cp node_modules/essentia.js/dist/essentia-wasm.wasm.wasm public/essentia/
 
 # Python venv setup
 RUN python3 -m venv venv && \
