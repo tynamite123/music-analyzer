@@ -1,5 +1,5 @@
 // index.js
-// Express backend with Multer uploads, CORS lockdown, ffmpeg conversion, and BPM via Essentia.js
+// Express backend with Multer uploads, CORS, ffmpeg conversion, and BPM via Essentia.js
 
 // Node/Express basics
 const express = require("express");
@@ -13,45 +13,58 @@ const { spawn } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 const WavDecoder = require("wav-decoder");
 
-// Essentia.js (WASM): load via dynamic import for CommonJS
+const app = express();
+
+// ---------- Serve Essentia WASM files ----------
+app.use("/essentia", express.static(path.join(__dirname, "public/essentia")));
+
+// ---------- CORS CONFIG ----------
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://music-analyzer.web.app",
+  "https://music-analyzer.firebaseapp.com"
+];
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // allow server-to-server, curl, Postman
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      cb(new Error("CORS: Origin not allowed"));
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+    credentials: false,
+    maxAge: 86400
+  })
+);
+
+// ---------- Essentia.js WASM Initialization ----------
 let essentia = null;
+
 async function initEssentia() {
-  // Use the ES module build shipped with the package
-  const { default: EssentiaCore } = await import("essentia.js/dist/essentia.js-core.es.js");
-  const { EssentiaWASM } = await import("essentia.js/dist/essentia-wasm.es.js");
-  essentia = new EssentiaCore(EssentiaWASM);
-  // Optionally log version or available algorithms
-  // console.log("Essentia.js version:", essentia.version);
-  // console.log("Algorithms:", essentia.algorithmNames.slice(0, 10));
+  try {
+    const { default: EssentiaCore } = await import("essentia.js/dist/essentia.js-core.es.js");
+    const { EssentiaWASM } = await import("essentia.js/dist/essentia-wasm.es.js");
+
+    essentia = new EssentiaCore(EssentiaWASM, {
+      wasmURL: "/essentia/essentia-wasm.wasm"
+    });
+
+    console.log("Essentia initialized successfully");
+  } catch (err) {
+    console.error("Essentia init error:", err);
+    throw err;
+  }
 }
-const initPromise = initEssentia(); // kick off at module load
+
+const initPromise = initEssentia();
 
 // ---------- Config ----------
 const PORT = process.env.PORT || 8080;
 
-// Replace with your actual Firebase Hosting domains
-const ALLOWED_ORIGINS = [
-  "https://YOUR_PROJECT_ID.web.app",
-  "https://YOUR_PROJECT_ID.firebaseapp.com",
-];
-
-const app = express();
-
-// Strict CORS: only allow your frontend domains
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true); // allow same-origin/local tools
-      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-      cb(new Error("CORS: Origin not allowed"));
-    },
-    methods: ["POST", "OPTIONS", "GET"],
-    allowedHeaders: ["Content-Type"],
-    maxAge: 86400,
-  })
-);
-
-// Multer storage: temp folder outside any public path
+// Multer storage
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -63,7 +76,6 @@ const storage = multer.diskStorage({
   },
 });
 
-// Accept only MP3/WAV; limit size
 const allowedMimes = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav"]);
 const upload = multer({
   storage,
@@ -78,8 +90,6 @@ const upload = multer({
 });
 
 // ---------- Helpers ----------
-
-// Convert any audio to mono 44.1kHz WAV using ffmpeg; return temp WAV path
 function toMonoWav(inputPath) {
   return new Promise((resolve, reject) => {
     const outPath = path.join(
@@ -91,8 +101,8 @@ function toMonoWav(inputPath) {
       "-y",
       "-i",
       inputPath,
-      "-ac", "1",         // mono
-      "-ar", "44100",     // sample rate
+      "-ac", "1",
+      "-ar", "44100",
       "-vn",
       "-f", "wav",
       outPath,
@@ -107,7 +117,6 @@ function toMonoWav(inputPath) {
   });
 }
 
-// Decode WAV samples (Float32Array) from a file
 async function decodeWavFloat32(wavPath) {
   const buf = fs.readFileSync(wavPath);
   const wav = await WavDecoder.decode(buf);
@@ -116,23 +125,18 @@ async function decodeWavFloat32(wavPath) {
   return { samples: channelData, sampleRate: wav.sampleRate };
 }
 
-// Compute BPM using Essentia.js RhythmExtractor2013
 function computeBpmEssentia(samples, sampleRate) {
-  // RhythmExtractor2013 expects a mono PCM signal and sample rate; returns tempo and beats
-  // Docs: tempo estimation demo and API references for Essentia.js algorithms.
   const r = essentia.RhythmExtractor2013({
     signal: samples,
     sampleRate: sampleRate,
   });
-  // r.tempo, r.beats, r.ticks, r.confidence
   return {
     bpm: r.tempo,
     confidence: r.confidence,
-    beats: r.beats, // array of beat times in seconds
+    beats: r.beats,
   };
 }
 
-// Clean up files safely
 function safeUnlink(filePath) {
   try {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -140,7 +144,6 @@ function safeUnlink(filePath) {
 }
 
 // ---------- Routes ----------
-
 app.get("/health", async (req, res) => {
   try {
     await initPromise;
@@ -169,20 +172,15 @@ app.post("/upload", upload.array("track", 10), async (req, res) => {
     let wavPath;
 
     try {
-      // Convert to mono WAV for analysis
       wavPath = await toMonoWav(originalPath);
-
-      // Decode samples
       const { samples, sampleRate } = await decodeWavFloat32(wavPath);
-
-      // Compute BPM via Essentia
       const rhythm = computeBpmEssentia(samples, sampleRate);
 
       results.push({
         originalName: file.originalname,
         bpm: Math.round(rhythm.bpm * 100) / 100,
         confidence: Math.round(rhythm.confidence * 1000) / 1000,
-        beats: rhythm.beats, // optionally omit if payload size matters
+        beats: rhythm.beats,
       });
     } catch (err) {
       results.push({
@@ -190,7 +188,6 @@ app.post("/upload", upload.array("track", 10), async (req, res) => {
         error: err.message,
       });
     } finally {
-      // Remove temp files
       safeUnlink(originalPath);
       if (wavPath) safeUnlink(wavPath);
     }
