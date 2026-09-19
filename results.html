@@ -9,9 +9,15 @@
   <div id="resultsList">Loading...</div>
 
   <script>
+    const API_URL = (
+      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    )
+      ? "http://localhost:8080/results-json"
+      : "https://music-backend-785098527240.europe-west1.run.app/results-json";
+
     async function loadResults() {
       try {
-        const response = await fetch("https://music-backend-785098527240.europe-west1.run.app/results-json");
+        const response = await fetch(API_URL);
         if (!response.ok) {
           throw new Error("Failed to fetch results");
         }
@@ -24,7 +30,7 @@
     }
 
     function renderResults(tracks) {
-      if (!tracks.length) {
+      if (!tracks || !tracks.length) {
         document.getElementById("resultsList").innerText = "No tracks analyzed yet.";
         return;
       }
@@ -33,14 +39,14 @@
       for (const track of tracks) {
         html += `
           <li>
-            <strong>${track.filename}</strong><br/>
-            BPM: ${track.bpm} | Key: ${track.key} <br/>
+            <strong>${track.filename || track.originalName || "Unknown file"}</strong><br/>
+            BPM: ${track.bpm ?? "Not available"} | Key: ${track.key ?? "Not available"} <br/>
             Energy: ${track.energy ?? "Not available"} | 
             Loudness: ${track.loudness ?? "Not available"} | 
             Danceability: ${track.danceability ?? "Not available"}<br/>
-            Spectral Centroid: ${track.spectral_centroid} | 
-            Bandwidth: ${track.spectral_bandwidth} | 
-            Rolloff: ${track.spectral_rolloff}
+            Spectral Centroid: ${track.spectral_centroid ?? "Not available"} | 
+            Bandwidth: ${track.spectral_bandwidth ?? "Not available"} | 
+            Rolloff: ${track.spectral_rolloff ?? "Not available"}
           </li><br/>
         `;
       }

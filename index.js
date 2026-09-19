@@ -14,13 +14,17 @@ const ffmpegPath = require("ffmpeg-static");
 const WavDecoder = require("wav-decoder");
 
 const app = express();
+const PORT = process.env.PORT || 8080;
 
-// ---------- Serve Essentia WASM files ----------
-app.use("/essentia", express.static(path.join(__dirname, "public/essentia")));
+// ---------- Serve frontend and Essentia assets ----------
+app.use(express.static(path.join(__dirname)));
+app.use("/essentia", express.static(path.join(__dirname, "node_modules/essentia.js/dist")));
 
 // ---------- CORS CONFIG ----------
 const ALLOWED_ORIGINS = [
+  "http://localhost",
   "http://localhost:3000",
+  "http://127.0.0.1",
   "http://127.0.0.1:3000",
   "https://music-analyzer.web.app",
   "https://music-analyzer.firebaseapp.com"
@@ -62,9 +66,6 @@ async function initEssentia() {
 const initPromise = initEssentia();
 
 // ---------- Config ----------
-const PORT = process.env.PORT || 8080;
-
-// Multer storage
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -88,6 +89,8 @@ const upload = multer({
     else cb(new Error("Unsupported file type"));
   },
 });
+
+let latestAnalysis = [];
 
 // ---------- Helpers ----------
 function toMonoWav(inputPath) {
@@ -153,6 +156,10 @@ app.get("/health", async (req, res) => {
   }
 });
 
+app.get("/results-json", (req, res) => {
+  res.json(latestAnalysis);
+});
+
 app.post("/upload", upload.array("track", 10), async (req, res) => {
   try {
     await initPromise;
@@ -168,6 +175,7 @@ app.post("/upload", upload.array("track", 10), async (req, res) => {
   const results = [];
 
   for (const file of req.files) {
+    const originalName = file.originalname;
     const originalPath = file.path;
     let wavPath;
 
@@ -176,15 +184,19 @@ app.post("/upload", upload.array("track", 10), async (req, res) => {
       const { samples, sampleRate } = await decodeWavFloat32(wavPath);
       const rhythm = computeBpmEssentia(samples, sampleRate);
 
-      results.push({
-        originalName: file.originalname,
+      const savedResult = {
+        filename: originalName,
+        originalName,
         bpm: Math.round(rhythm.bpm * 100) / 100,
         confidence: Math.round(rhythm.confidence * 1000) / 1000,
         beats: rhythm.beats,
-      });
+      };
+
+      results.push(savedResult);
     } catch (err) {
       results.push({
-        originalName: file.originalname,
+        filename: originalName,
+        originalName,
         error: err.message,
       });
     } finally {
@@ -193,7 +205,8 @@ app.post("/upload", upload.array("track", 10), async (req, res) => {
     }
   }
 
-  res.json({ tracks: results });
+  latestAnalysis = results;
+  res.json({ analysis: results, tracks: results });
 });
 
 // ---------- Start ----------
